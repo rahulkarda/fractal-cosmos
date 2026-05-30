@@ -122,7 +122,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var autopilot = new window.AutoPilot(
       function() { return { cx: cx, cy: cy, zoom: zoom }; },
       function(ncx, ncy, nzoom) { cx = ncx; cy = ncy; zoom = nzoom; },
-      scheduleRender
+      scheduleRender,
+      function() { return renderer; }
     );
 
     // 3. Hash restore — apply before initial render so shared URLs work

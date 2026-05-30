@@ -229,9 +229,65 @@ window.FractalRenderer = class FractalRenderer {
     this.ctx.putImageData(imageData, 0, 0);
   }
 
-  // ---------------------------------------------------------------------------
-  // Utility
-  // ---------------------------------------------------------------------------
+  // Low-quality render for smooth animation: draws every other pixel at 32 iters,
+  // then scales up with drawImage. Fast enough for 60fps during autopilot flight.
+  renderFast(cx, cy, zoom) {
+    const MAX_ITER = 48;
+    const scale   = 3; // render at 1/3 resolution then upscale
+    const w = Math.ceil(this.canvas.width  / scale);
+    const h = Math.ceil(this.canvas.height / scale);
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = w;
+    offscreen.height = h;
+    const octx = offscreen.getContext('2d');
+    const imageData = octx.createImageData(w, h);
+    const data      = imageData.data;
+
+    const halfW = w / 2, halfH = h / 2;
+    const zoomedOut = zoom / scale;
+
+    const isJulia    = (this.mode === 'julia');
+    const juliaCRe   = this.juliaC.r;
+    const juliaCIm   = this.juliaC.i;
+    const interior   = this.hexToRgb(this.theme.interior);
+    const hueStart   = this.theme.hueStart;
+    const hueStep    = this.theme.hueStep;
+    const saturation = this.theme.saturation;
+
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const pixRe = cx + (px - halfW) / zoomedOut;
+        const pixIm = cy + (py - halfH) / zoomedOut;
+        let zr, zi, cRe, cIm;
+        if (isJulia) { zr = pixRe; zi = pixIm; cRe = juliaCRe; cIm = juliaCIm; }
+        else         { zr = 0;     zi = 0;     cRe = pixRe;    cIm = pixIm;    }
+        let iter = 0;
+        while (iter < MAX_ITER) {
+          const zr2 = zr * zr, zi2 = zi * zi;
+          if (zr2 + zi2 > 4) break;
+          const nzr = zr2 - zi2 + cRe;
+          zi = 2 * zr * zi + cIm;
+          zr = nzr;
+          iter++;
+        }
+        let r, g, b;
+        if (iter === MAX_ITER) {
+          r = interior.r; g = interior.g; b = interior.b;
+        } else {
+          const modulus    = Math.max(2.0, Math.sqrt(zr * zr + zi * zi));
+          const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / Math.log(2);
+          const h2 = isNaN(smoothIter) ? hueStart : (hueStart + smoothIter * hueStep) % 360;
+          const l  = isNaN(smoothIter) ? 50 : (45 + 20 * Math.sin(smoothIter * 0.15));
+          [r, g, b] = hslToRgb(h2, saturation, l);
+        }
+        const idx = (py * w + px) * 4;
+        data[idx] = r; data[idx+1] = g; data[idx+2] = b; data[idx+3] = 255;
+      }
+    }
+    octx.putImageData(imageData, 0, 0);
+    this.ctx.drawImage(offscreen, 0, 0, this.canvas.width, this.canvas.height);
+  }
 
   /**
    * Return a string hash derived from the supplied coordinates, suitable for
