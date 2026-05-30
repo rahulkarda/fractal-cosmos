@@ -511,7 +511,7 @@
       const statsToShow = [
         { label: 'Population',   key: 'population'   },
         { label: 'Civilization', key: 'civilization' },
-        { label: 'Danger',       key: 'dangerLevel'  },
+        // dangerLevel is shown via the visual bar below — omitted here to avoid duplication
       ];
 
       statsToShow.forEach(function (stat) {
@@ -581,7 +581,7 @@
       Object.assign(container.style, {
         position:       'fixed',
         bottom:         '20px',
-        left:           '180px',
+        left:           '244px',  // clears bookmark panel (left:16px + maxWidth:220px + 8px gap)
         zIndex:         '1000',
         background:     'rgba(5,5,16,0.85)',
         border:         '1px solid rgba(0,212,255,0.25)',
@@ -688,6 +688,9 @@
 
       // 1. Draw background
       if (this._minimapBg) ctx.putImageData(this._minimapBg, 0, 0);
+
+      // Nothing to draw if trail is empty
+      if (!this._trail || this._trail.length === 0) return;
 
       // coord-to-pixel helpers
       const toPixX = (cx) => (cx - (-2.5)) / 3.5 * W;

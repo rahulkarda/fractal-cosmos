@@ -52,6 +52,10 @@ var juliaPresetIndex = 0;
 function toggleJulia() {
   if (!isJuliaMode) {
     isJuliaMode = true;
+    // Stop autopilot before capturing the Mandelbrot view — if autopilot is
+    // still running it will keep overwriting cx/cy/zoom after the snapshot,
+    // making the restore value on Julia exit a stale mid-animation frame.
+    if (autopilot && autopilot.isRunning) autopilot.stop();
     // Save current Mandelbrot view so we can restore it later
     savedMandelbrot = { cx: cx, cy: cy, zoom: zoom };
     // Pick next preset constant
@@ -119,12 +123,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     ui.init();
     ui.initMinimap(canvas);
-    var autopilot = new window.AutoPilot(
-      function() { return { cx: cx, cy: cy, zoom: zoom }; },
-      function(ncx, ncy, nzoom) { cx = ncx; cy = ncy; zoom = nzoom; },
-      scheduleRender,
-      function() { return renderer; }
-    );
+
+    // Expose Julia mode state so autopilot.js can check it before starting
+    window._isJuliaMode = function () { return isJuliaMode; };
+
+    var autopilot = null;
+    if (typeof window.AutoPilot === 'function') {
+      autopilot = new window.AutoPilot(
+        function() { return { cx: cx, cy: cy, zoom: zoom }; },
+        function(ncx, ncy, nzoom) { cx = ncx; cy = ncy; zoom = nzoom; },
+        scheduleRender,
+        function() { return renderer; }
+      );
+    } else {
+      console.warn('AutoPilot not loaded — autopilot features disabled');
+    }
 
     // 3. Hash restore — apply before initial render so shared URLs work
     // Parse URL hash inline — avoids dependency on CosmosUI static method
@@ -156,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Canvas: wheel (zoom centred on cursor) ──────────────────────────────
     canvas.addEventListener('wheel', function (e) {
-      if (typeof autopilot !== 'undefined' && autopilot.isRunning) autopilot.stop();
+      if (autopilot && autopilot.isRunning) autopilot.stop();
       e.preventDefault();
       var factor = e.deltaY < 0 ? 1.6 : 0.625;
       cx += (e.clientX - canvas.width  / 2) / zoom * (1 - 1 / factor);
@@ -167,7 +180,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Canvas: mouse drag ──────────────────────────────────────────────────
     canvas.addEventListener('mousedown', function (e) {
-      if (typeof autopilot !== 'undefined' && autopilot.isRunning) autopilot.stop();
+      if (autopilot && autopilot.isRunning) autopilot.stop();
       isDragging = true;
       dragStartX  = e.clientX;
       dragStartY  = e.clientY;
@@ -218,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
       switch (e.key) {
         case 'r':
         case 'R':
+          if (autopilot && autopilot.isRunning) autopilot.stop();
           cx = -0.5;
           cy = 0;
           zoom = 250;
@@ -275,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Auto-pilot
         case 'a':
         case 'A':
-          if (typeof autopilot !== 'undefined') {
+          if (autopilot) {
             if (autopilot.isRunning) { autopilot.stop(); }
             else { autopilot.start(); }
           }

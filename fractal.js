@@ -19,6 +19,10 @@ window.FractalRenderer = class FractalRenderer {
 
     // Active colour theme — defaults to the first theme (Deep Space)
     this.theme  = FractalRenderer.getColorThemes()[0];
+
+    // Cached offscreen canvas for renderFast — allocated once, resized on demand
+    this._offscreenCanvas = null;
+    this._offscreenCtx    = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -148,6 +152,7 @@ window.FractalRenderer = class FractalRenderer {
     const hueStart     = this.theme.hueStart;
     const hueStep      = this.theme.hueStep;
     const saturation   = this.theme.saturation;
+    const LOG2         = Math.log(2);
 
     for (let py = 0; py < height; py++) {
       for (let px = 0; px < width; px++) {
@@ -206,7 +211,7 @@ window.FractalRenderer = class FractalRenderer {
           // to go negative-infinity or NaN.  The clamp is a no-op for well-escaped
           // points and prevents all NaN propagation without changing any colours.
           const modulus    = Math.max(2.0, Math.sqrt(zr * zr + zi * zi));
-          const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / Math.log(2);
+          const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / LOG2;
 
           // Guard against NaN smoothIter (defensive — should not occur after the
           // modulus clamp above, but protects against future escape-threshold changes)
@@ -237,10 +242,16 @@ window.FractalRenderer = class FractalRenderer {
     const w = Math.ceil(this.canvas.width  / scale);
     const h = Math.ceil(this.canvas.height / scale);
 
-    const offscreen = document.createElement('canvas');
-    offscreen.width  = w;
-    offscreen.height = h;
-    const octx = offscreen.getContext('2d');
+    // Reuse the cached offscreen canvas; only reallocate when dimensions change
+    if (!this._offscreenCanvas) {
+      this._offscreenCanvas = document.createElement('canvas');
+      this._offscreenCtx    = this._offscreenCanvas.getContext('2d');
+    }
+    if (this._offscreenCanvas.width !== w || this._offscreenCanvas.height !== h) {
+      this._offscreenCanvas.width  = w;
+      this._offscreenCanvas.height = h;
+    }
+    const octx = this._offscreenCtx;
     const imageData = octx.createImageData(w, h);
     const data      = imageData.data;
 
@@ -254,6 +265,7 @@ window.FractalRenderer = class FractalRenderer {
     const hueStart   = this.theme.hueStart;
     const hueStep    = this.theme.hueStep;
     const saturation = this.theme.saturation;
+    const LOG2       = Math.log(2);
 
     for (let py = 0; py < h; py++) {
       for (let px = 0; px < w; px++) {
@@ -276,7 +288,7 @@ window.FractalRenderer = class FractalRenderer {
           r = interior.r; g = interior.g; b = interior.b;
         } else {
           const modulus    = Math.max(2.0, Math.sqrt(zr * zr + zi * zi));
-          const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / Math.log(2);
+          const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / LOG2;
           const h2 = isNaN(smoothIter) ? hueStart : (hueStart + smoothIter * hueStep) % 360;
           const l  = isNaN(smoothIter) ? 50 : (45 + 20 * Math.sin(smoothIter * 0.15));
           [r, g, b] = hslToRgb(h2, saturation, l);
@@ -286,7 +298,7 @@ window.FractalRenderer = class FractalRenderer {
       }
     }
     octx.putImageData(imageData, 0, 0);
-    this.ctx.drawImage(offscreen, 0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(this._offscreenCanvas, 0, 0, this.canvas.width, this.canvas.height);
   }
 
   /**
