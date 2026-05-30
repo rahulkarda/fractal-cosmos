@@ -496,17 +496,15 @@
         this._statsContainer.removeChild(this._statsContainer.firstChild);
       }
 
+      // Only include keys that worldgen actually returns, so rows are never silently empty
       const statsToShow = [
         { label: 'Population',   key: 'population'   },
-        { label: 'Temperature',  key: 'temperature'  },
-        { label: 'Atmosphere',   key: 'atmosphere'   },
-        { label: 'Age',          key: 'age'          },
-        { label: 'Gravity',      key: 'gravity'      },
-        { label: 'Discovered',   key: 'discovered'   },
+        { label: 'Civilization', key: 'civilization' },
+        { label: 'Danger',       key: 'dangerLevel'  },
       ];
 
       statsToShow.forEach(function (stat) {
-        if (worldData[stat.key] === undefined && worldData[stat.key] !== 0) return;
+        if (worldData[stat.key] === undefined) return;
         const row = document.createElement('div');
         row.className = 'stat-row';
 
@@ -522,6 +520,21 @@
         row.appendChild(valueEl);
         this._statsContainer.appendChild(row);
       }, this);
+
+      // Resources row — worldgen returns this as an array
+      if (Array.isArray(worldData.resources) && worldData.resources.length > 0) {
+        var resRow = document.createElement('div');
+        resRow.className = 'stat-row';
+        var resLabel = document.createElement('span');
+        resLabel.className = 'stat-label';
+        resLabel.textContent = 'Resources';
+        var resValue = document.createElement('span');
+        resValue.className = 'stat-value';
+        resValue.textContent = worldData.resources.join(', ');
+        resRow.appendChild(resLabel);
+        resRow.appendChild(resValue);
+        this._statsContainer.appendChild(resRow);
+      }
 
       // Danger bar
       const dangerLevel = Number(worldData.dangerLevel) || 0;

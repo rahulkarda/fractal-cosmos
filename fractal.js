@@ -199,14 +199,21 @@ window.FractalRenderer = class FractalRenderer {
           g = interiorRgb.g;
           b = interiorRgb.b;
         } else {
-          // Smooth (continuous) colouring to eliminate banding
-          const modulus    = Math.sqrt(zr * zr + zi * zi);
+          // Smooth (continuous) colouring to eliminate banding.
+          // Clamp modulus to at least 2.0 before taking log — the escape threshold
+          // guarantees modulus > 2 in practice, but floating-point edge cases near
+          // the boundary can produce values just below 2, causing log(log(modulus))
+          // to go negative-infinity or NaN.  The clamp is a no-op for well-escaped
+          // points and prevents all NaN propagation without changing any colours.
+          const modulus    = Math.max(2.0, Math.sqrt(zr * zr + zi * zi));
           const smoothIter = iter + 1 - Math.log(Math.log(modulus)) / Math.log(2);
 
-          const h = (hueStart + smoothIter * hueStep) % 360;
+          // Guard against NaN smoothIter (defensive — should not occur after the
+          // modulus clamp above, but protects against future escape-threshold changes)
+          const h = isNaN(smoothIter) ? hueStart : (hueStart + smoothIter * hueStep) % 360;
           const s = saturation;
           // Keep lightness in a visible range regardless of iteration count
-          const l = 45 + 20 * Math.sin(smoothIter * 0.15);
+          const l = isNaN(smoothIter) ? 50 : (45 + 20 * Math.sin(smoothIter * 0.15));
 
           [r, g, b] = hslToRgb(h, s, l);
         }
