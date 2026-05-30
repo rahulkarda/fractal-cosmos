@@ -198,7 +198,6 @@ body {
   text-align: right;
   line-height: 2;
   letter-spacing: 0.05em;
-  white-space: pre;
   pointer-events: none;
   background: rgba(5, 5, 16, 0.75);
   border: 1px solid rgba(0, 212, 255, 0.2);

@@ -322,21 +322,38 @@ document.addEventListener('DOMContentLoaded', function () {
       hint.id = 'controls-hint';
       document.body.appendChild(hint);
     }
-    hint.textContent = [
-      'Controls:',
-      'Scroll          — zoom in / out',
-      'Drag            — pan',
-      'Double-click    — zoom in x3',
-      'Right-click     — zoom out x3',
-      'R               — reset view',
-      'M               — toggle music',
-      '+ / =           — zoom in',
-      '- / _           — zoom out',
-      'J               — toggle Julia mode',
-      '1-5             — color themes',
-      'B               — save bookmark',
-      'S               — screenshot'
-    ].join('\n');
+    // Build as two-column grid so keys and descriptions stay aligned
+    var controls = [
+      ['Scroll',        'zoom in / out'],
+      ['Drag',          'pan'],
+      ['Double-click',  'zoom in ×3'],
+      ['Right-click',   'zoom out ×3'],
+      ['R',             'reset view'],
+      ['M',             'toggle music'],
+      ['+ / =',         'zoom in'],
+      ['- / _',         'zoom out'],
+      ['J',             'Julia mode'],
+      ['1 – 5',         'color themes'],
+      ['B',             'bookmark'],
+      ['S',             'screenshot'],
+    ];
+    hint.style.display = 'grid';
+    hint.style.gridTemplateColumns = 'auto auto';
+    hint.style.columnGap = '16px';
+    hint.style.rowGap = '2px';
+    controls.forEach(function(row) {
+      var key = document.createElement('span');
+      key.textContent = row[0];
+      key.style.textAlign = 'right';
+      key.style.color = 'rgba(0,212,255,0.8)';
+      key.style.fontFamily = "'Orbitron', monospace";
+      key.style.fontSize = '0.85em';
+      var desc = document.createElement('span');
+      desc.textContent = row[1];
+      desc.style.textAlign = 'left';
+      hint.appendChild(key);
+      hint.appendChild(desc);
+    });
   } catch(err) {
     console.error('COSMOS INIT ERROR:', err);
   }
