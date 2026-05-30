@@ -81,6 +81,7 @@ body {
   z-index: 20;
   padding: 24px;
   overflow-y: auto;
+  max-height: 100vh;
   pointer-events: all;
 }
 
@@ -204,6 +205,15 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
   backdrop-filter: blur(10px);
+}
+
+/* Minimap trail widget — positioned on the left side via inline JS (ui.js initMinimap).
+   This rule documents the intent and prevents accidental right-side drift. */
+#minimap-container {
+  position: fixed;
+  bottom: 20px;
+  left: 180px; /* sits right of the bookmark panel (left:16px, width ~160px) */
+  z-index: 1000;
 }
 
 body::after {

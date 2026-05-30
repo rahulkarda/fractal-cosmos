@@ -12,12 +12,6 @@
  *   string. Fix: monkey-patch DOMContentLoaded so app.js's hint block is a
  *   no-op when the element already contains child nodes.
  *
- * PATCH 3 (UI): showWorldPanel only displays stats whose keys exist in worldgen
- *   output AND match the hardcoded list (population, temperature, atmosphere,
- *   age, gravity, discovered). worldgen.js also returns `civilization` and
- *   `resources` (an array) which are silently dropped.
- *   Fix: patch showWorldPanel to also render civilization and resources.
- *
  * PATCH 4 (Audio): AudioEngine.stop() calls ctx.suspend() but never resumes
  *   the context when music is toggled back on, silencing all future playback.
  *   Fix: patch stop() to call ctx.close() instead, and patch init() to always
@@ -118,65 +112,6 @@
     }
     return _origAddEventListener(type, listener, options);
   };
-
-  // ── PATCH 3: show civilization and resources in the world panel ────────────
-  // Wrap showWorldPanel to inject the two extra fields after the original call.
-  //
-  // Use _cosmosUISingleton (captured by PATCH 1 above) rather than reading
-  // window.CosmosUI here, because window.CosmosUI is now a constructor function
-  // (after PATCH 1) and does not carry the instance methods directly.
-  var _singleton3 = _cosmosUISingleton;
-
-  if (_singleton3 && typeof _singleton3.showWorldPanel === 'function') {
-    var _origShowWorldPanel = _singleton3.showWorldPanel.bind(_singleton3);
-
-    _singleton3.showWorldPanel = function showWorldPanel(worldData) {
-      _origShowWorldPanel(worldData);
-
-      // Append civilization row
-      var statsContainer = this._statsContainer;
-      if (!statsContainer) return;
-
-      if (worldData.civilization) {
-        var civRow = document.createElement('div');
-        civRow.className = 'stat-row';
-
-        var civLabel = document.createElement('span');
-        civLabel.className = 'stat-label';
-        civLabel.textContent = 'Civilization';
-
-        var civValue = document.createElement('span');
-        civValue.className = 'stat-value';
-        civValue.textContent = worldData.civilization;
-
-        civRow.appendChild(civLabel);
-        civRow.appendChild(civValue);
-        statsContainer.appendChild(civRow);
-      }
-
-      // Append resources row (array — join with comma)
-      if (Array.isArray(worldData.resources) && worldData.resources.length > 0) {
-        var resRow = document.createElement('div');
-        resRow.className = 'stat-row';
-
-        var resLabel = document.createElement('span');
-        resLabel.className = 'stat-label';
-        resLabel.textContent = 'Resources';
-
-        var resValue = document.createElement('span');
-        resValue.className = 'stat-value';
-        resValue.textContent = worldData.resources.join(', ');
-
-        resRow.appendChild(resLabel);
-        resRow.appendChild(resValue);
-        statsContainer.appendChild(resRow);
-      }
-    };
-
-    console.info('[patches.js] PATCH 3 applied: showWorldPanel now renders civilization and resources.');
-  } else if (!_singleton3) {
-    console.warn('[patches.js] PATCH 3 skipped: CosmosUI singleton not available (PATCH 1 did not run).');
-  }
 
   // ── PATCH 4: fix AudioEngine resume after stop() ──────────────────────────
   // AudioEngine.stop() calls this.ctx.suspend().  A suspended AudioContext

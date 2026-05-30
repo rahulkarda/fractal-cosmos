@@ -580,8 +580,8 @@
       container.id = 'minimap-container';
       Object.assign(container.style, {
         position:       'fixed',
-        bottom:         '420px',
-        right:          '20px',
+        bottom:         '20px',
+        left:           '180px',
         zIndex:         '1000',
         background:     'rgba(5,5,16,0.85)',
         border:         '1px solid rgba(0,212,255,0.25)',
