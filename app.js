@@ -322,6 +322,8 @@ document.addEventListener('DOMContentLoaded', function () {
       hint.id = 'controls-hint';
       document.body.appendChild(hint);
     }
+    // Clear any rows already added by ui.js
+    while (hint.firstChild) hint.removeChild(hint.firstChild);
     // Build as two-column grid so keys and descriptions stay aligned
     var controls = [
       ['Scroll',        'zoom in / out'],
