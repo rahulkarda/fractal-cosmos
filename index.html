@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="FRACTAL COSMOS — Infinite procedural universe explorer. Navigate the Mandelbrot set to discover alien worlds.">
+<meta property="og:title" content="FRACTAL COSMOS">
+<meta property="og:description" content="An infinite procedural universe hidden in mathematics.">
+<title>FRACTAL COSMOS</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="splash" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#050510;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.8s;">
+<div style="font-family:'Courier New',monospace;text-align:center;">
+<div style="color:#00d4ff;font-size:3em;letter-spacing:0.4em;margin-bottom:12px;text-shadow:0 0 30px #00d4ff88;">FRACTAL COSMOS</div>
+<div style="color:#8b5cf6;font-size:0.85em;letter-spacing:0.3em;margin-bottom:48px;">INFINITE UNIVERSE EXPLORER v2.0</div>
+<div style="color:rgba(200,216,232,0.4);font-size:0.7em;letter-spacing:0.1em;">CLICK ANYWHERE TO BEGIN</div>
+<div style="color:rgba(200,216,232,0.25);font-size:0.55em;letter-spacing:0.08em;margin-top:16px;">J=Julia Mode&nbsp;&nbsp;1-5=Themes&nbsp;&nbsp;B=Bookmark&nbsp;&nbsp;S=Screenshot</div>
+</div>
+</div>
+<script src="worldgen.js"></script>
+<script src="audio.js"></script>
+<script src="fractal.js"></script>
+<script src="ui.js"></script>
+<script src="patches.js"></script>
+<script src="app.js"></script>
+<script>
+var splash = document.getElementById('splash');
+window.addEventListener('click', function() {
+  if(splash && splash.style.display !== 'none') {
+    splash.style.opacity = '0';
+    setTimeout(function(){ splash.style.display = 'none'; }, 800);
+  }
+}, { once: true });
+</script>
+</body>
+</html>
