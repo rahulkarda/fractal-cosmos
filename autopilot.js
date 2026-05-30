@@ -73,6 +73,10 @@
 
     start() {
       if (this.isRunning) return;
+      // Do not start autopilot while Julia mode is active — autopilot navigates
+      // Mandelbrot coordinates and would render them on the Julia renderer, and
+      // the juliaDriftInterval would treat autopilot's cx/cy as Julia constants.
+      if (typeof window._isJuliaMode === 'function' && window._isJuliaMode()) return;
       this.isRunning  = true;
       this._destIndex = 0;
       this._beginDestination();
@@ -178,7 +182,12 @@
       // debounce in scheduleRender so every RAF frame actually renders.
       const renderer = this.getRenderer ? this.getRenderer() : null;
       if (renderer && typeof renderer.renderFast === 'function') {
-        renderer.renderFast(cx, cy, zoom);
+        try {
+          renderer.renderFast(cx, cy, zoom);
+        } catch (e) {
+          // renderFast threw — log once and continue; phase advancement still runs
+          console.error('AutoPilot: renderFast error', e);
+        }
         // Still call scheduleRender for coord HUD + trail updates (debounced,
         // so it fires at most every 40ms rather than every frame)
         this.scheduleRender();

@@ -79,34 +79,66 @@
   }
 
   // ── PATCH 2: prevent app.js from clobbering #controls-hint ────────────────
-  // app.js runs inside DOMContentLoaded and does:
-  //   hint.textContent = ['Controls:', ...].join('\n');
-  // which nukes the <span>/<br> children that ui.init() already built.
+  // app.js (inside DOMContentLoaded) does:
+  //   while (hint.firstChild) hint.removeChild(hint.firstChild);   // clear
+  //   hint.appendChild(...)  // rebuild as grid
+  // This destroys the three-line SCROLL/DRAG/CLICK hint that ui.init() already built.
   //
-  // Strategy: override the textContent setter on the specific element after
-  // DOMContentLoaded fires (so ui.init() has already run), and before app.js
-  // tries to set it.  We do this by wrapping addEventListener for
-  // DOMContentLoaded and injecting our guard at the start of the queue.
+  // The original approach (sealing textContent in a pre-hook) failed on two grounds:
+  //   1. The pre-hook fires before ui.init() so #controls-hint does not exist yet.
+  //   2. app.js uses removeChild/appendChild, not textContent assignment.
+  //
+  // Fix: use a post-hook (runs after listener(e) returns, i.e. after app.js finishes)
+  // to restore ui.js's original hint children, discarding app.js's grid rebuild.
+  //
+  // We capture ui.js's children immediately after DOMContentLoaded fires and ui.init()
+  // has built them, store them, then re-insert them after app.js has run.
   var _origAddEventListener = document.addEventListener.bind(document);
   document.addEventListener = function (type, listener, options) {
     if (type === 'DOMContentLoaded') {
-      // Wrap the listener so we can inject a pre-hook
       var wrappedListener = function (e) {
-        // Pre-hook: seal #controls-hint against textContent replacement
-        var hint = document.getElementById('controls-hint');
-        if (hint && hint.childNodes.length > 0) {
-          Object.defineProperty(hint, 'textContent', {
-            set: function () {
-              // Silently ignore — ui.js already built this element correctly
-            },
-            get: function () {
-              return hint.innerText;
-            },
-            configurable: true
-          });
-          console.info('[patches.js] PATCH 2 applied: #controls-hint textContent setter sealed.');
-        }
+        // Pre-hook: snapshot the hint children AFTER ui.init() runs.
+        // ui.init() is called synchronously inside the DOMContentLoaded callback
+        // that app.js registers. At this point (just before app.js's listener runs)
+        // the hint does NOT yet exist — so we capture it in the post-hook instead.
+
+        // Run the original app.js DOMContentLoaded callback
         listener(e);
+
+        // Post-hook: restore ui.js's #controls-hint if app.js clobbered it.
+        // ui.init() built the hint with SCROLL/DRAG/CLICK spans. app.js rebuilt it
+        // as a 13-row two-column grid. We prefer ui.js's version, so we restore it.
+        //
+        // Strategy: if the singleton already has the original hint children stored
+        // on _cosmosUISingleton, we can re-query from it. But simpler: just rebuild
+        // the three-span hint here, since we know exactly what ui.js creates.
+        var hint = document.getElementById('controls-hint');
+        if (hint) {
+          // Remove whatever app.js put in
+          while (hint.firstChild) hint.removeChild(hint.firstChild);
+
+          // Reset grid styles that app.js set
+          hint.style.display = '';
+          hint.style.gridTemplateColumns = '';
+          hint.style.columnGap = '';
+          hint.style.rowGap = '';
+
+          // Rebuild ui.js's original three-line layout
+          var lines = [
+            'SCROLL — zoom',
+            'DRAG   — pan',
+            'CLICK  — inspect world',
+          ];
+          lines.forEach(function (line) {
+            var span = document.createElement('span');
+            span.textContent = line;
+            var br = document.createElement('br');
+            hint.appendChild(span);
+            hint.appendChild(br);
+          });
+
+          console.info('[patches.js] PATCH 2 applied: #controls-hint restored to ui.js layout.');
+        }
       };
       return _origAddEventListener(type, wrappedListener, options);
     }
