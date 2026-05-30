@@ -205,7 +205,8 @@ window.FractalRenderer = class FractalRenderer {
 
           const h = (hueStart + smoothIter * hueStep) % 360;
           const s = saturation;
-          const l = Math.min(65, 30 + smoothIter * 0.8);
+          // Keep lightness in a visible range regardless of iteration count
+          const l = 45 + 20 * Math.sin(smoothIter * 0.15);
 
           [r, g, b] = hslToRgb(h, s, l);
         }

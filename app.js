@@ -6,6 +6,7 @@ let cx = -0.5, cy = 0, zoom = 250;
 let isDragging = false, dragStartX = 0, dragStartY = 0, dragStartCx = 0, dragStartCy = 0;
 let audioOn = false, renderPending = false, lastWorld = null, panelOpen = false;
 let isJuliaMode = false, juliaDriftInterval = null;
+let savedMandelbrot = null; // stash Mandelbrot view when entering Julia mode
 
 function scheduleRender() {
   if (renderPending) return;
@@ -36,10 +37,27 @@ function checkWorldDiscovery() {
 }
 
 // ── Julia mode toggle (shared logic) ──────────────────────────────────────
+// Beautiful pre-chosen Julia constants to cycle through
+var JULIA_PRESETS = [
+  { r: -0.7,    i:  0.27015 },  // classic spiral
+  { r: -0.4,    i:  0.6     },  // dendrite
+  { r:  0.285,  i:  0.01    },  // island
+  { r: -0.8,    i:  0.156   },  // rabbit
+  { r:  0.0,    i:  0.8     },  // san marco
+];
+var juliaPresetIndex = 0;
+
 function toggleJulia() {
   if (!isJuliaMode) {
     isJuliaMode = true;
-    renderer.setMode('julia', cx, cy);
+    // Save current Mandelbrot view so we can restore it later
+    savedMandelbrot = { cx: cx, cy: cy, zoom: zoom };
+    // Pick next preset constant
+    var preset = JULIA_PRESETS[juliaPresetIndex % JULIA_PRESETS.length];
+    juliaPresetIndex++;
+    renderer.setMode('julia', preset.r, preset.i);
+    // Reset to full view so Julia set is visible — Julia lives in [-2,2]x[-2,2]
+    cx = 0; cy = 0; zoom = Math.min(canvas.width, canvas.height) / 4.5;
     // Start slow drift toward current view center every 8 seconds
     juliaDriftInterval = setInterval(function () {
       renderer.juliaC.r += (cx - renderer.juliaC.r) * 0.05;
@@ -53,6 +71,12 @@ function toggleJulia() {
       juliaDriftInterval = null;
     }
     renderer.setMode('mandelbrot');
+    // Restore saved Mandelbrot view
+    if (savedMandelbrot) {
+      cx = savedMandelbrot.cx;
+      cy = savedMandelbrot.cy;
+      zoom = savedMandelbrot.zoom;
+    }
   }
   scheduleRender();
 }
