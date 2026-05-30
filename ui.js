@@ -41,6 +41,12 @@
 
       // Theme switcher
       this._themeSwitcher = null;
+
+      // Minimap
+      this._minimapCanvas = null;
+      this._minimapCtx    = null;
+      this._trail         = [];
+      this._minimapBg     = null;
     }
 
     init() {
@@ -169,6 +175,11 @@
 
       // ── Bookmark panel ────────────────────────────────────────────
       this._buildBookmarkPanel();
+
+      // ── Autopilot status listener ─────────────────────────────────
+      window.addEventListener('cosmos:autopilotStatus', (e) => {
+        this.updateAutopilotStatus(e.detail.active, e.detail.destination);
+      });
     }
 
     // ── Julia Mode Toggle ─────────────────────────────────────────────
@@ -560,6 +571,231 @@
         this._flashDiv.style.opacity = '0';
       }, 150);
     }
+
+    // ── Minimap trail widget ──────────────────────────────────────────
+
+    initMinimap() {
+      // Container
+      const container = document.createElement('div');
+      container.id = 'minimap-container';
+      Object.assign(container.style, {
+        position:       'fixed',
+        bottom:         '420px',
+        right:          '20px',
+        zIndex:         '1000',
+        background:     'rgba(5,5,16,0.85)',
+        border:         '1px solid rgba(0,212,255,0.25)',
+        borderRadius:   '8px',
+        padding:        '8px',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+      });
+
+      // Label
+      const label = document.createElement('div');
+      label.textContent = 'TRAIL';
+      Object.assign(label.style, {
+        fontFamily:    "'Orbitron', monospace",
+        fontSize:      '9px',
+        color:         'rgba(0,212,255,0.5)',
+        letterSpacing: '0.2em',
+        marginBottom:  '4px',
+      });
+
+      // Canvas
+      const mc = document.createElement('canvas');
+      mc.id = 'minimap-canvas';
+      mc.width = 160;
+      mc.height = 120;
+      mc.style.display = 'block';
+      mc.style.borderRadius = '4px';
+
+      container.appendChild(label);
+      container.appendChild(mc);
+      document.body.appendChild(container);
+
+      this._minimapCanvas = mc;
+      this._minimapCtx = mc.getContext('2d');
+      this._trail = [];
+
+      // Render low-quality Mandelbrot thumbnail into this._minimapBg
+      this._renderMinimapBg();
+    }
+
+    _renderMinimapBg() {
+      const W = 160;
+      const H = 120;
+      const MAX_ITER = 40;
+      const imageData = this._minimapCtx.createImageData(W, H);
+      const data = imageData.data;
+
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
+          const re0 = -2.5 + (px / W) * 3.5;
+          const im0 = -1.2 + (py / H) * 2.4;
+
+          let re = 0;
+          let im = 0;
+          let iter = 0;
+
+          while (iter < MAX_ITER) {
+            const re2 = re * re;
+            const im2 = im * im;
+            if (re2 + im2 > 4) break;
+            const newRe = re2 - im2 + re0;
+            im = 2 * re * im + im0;
+            re = newRe;
+            iter++;
+          }
+
+          const idx = (py * W + px) * 4;
+
+          if (iter === MAX_ITER) {
+            // Inside set: #050510 = rgb(5,5,16)
+            data[idx]     = 5;
+            data[idx + 1] = 5;
+            data[idx + 2] = 16;
+            data[idx + 3] = 255;
+          } else {
+            // Outside: hsl(240 + iter*9, 80%, 50%)
+            const h = 240 + iter * 9;
+            const rgb = hslToRgbMinimap(h, 80, 50);
+            data[idx]     = rgb[0];
+            data[idx + 1] = rgb[1];
+            data[idx + 2] = rgb[2];
+            data[idx + 3] = 255;
+          }
+        }
+      }
+
+      this._minimapBg = imageData;
+
+      // Draw the initial background
+      this._minimapCtx.putImageData(imageData, 0, 0);
+    }
+
+    addTrailPoint(cx, cy, zoom) {
+      if (!this._minimapCanvas) return;
+      this._trail.push({ cx, cy, zoom });
+      if (this._trail.length > 300) this._trail.shift();
+      this._drawMinimap();
+    }
+
+    _drawMinimap() {
+      const ctx = this._minimapCtx;
+      const W = this._minimapCanvas.width;   // 160
+      const H = this._minimapCanvas.height;  // 120
+
+      // 1. Draw background
+      if (this._minimapBg) ctx.putImageData(this._minimapBg, 0, 0);
+
+      // coord-to-pixel helpers
+      const toPixX = (cx) => (cx - (-2.5)) / 3.5 * W;
+      const toPixY = (cy) => (cy - (-1.2)) / 2.4 * H;
+
+      // 2. Draw trail line
+      if (this._trail.length > 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(0,212,255,0.55)';
+        ctx.lineWidth = 1.5;
+        const first = this._trail[0];
+        ctx.moveTo(toPixX(first.cx), toPixY(first.cy));
+        for (let i = 1; i < this._trail.length; i++) {
+          ctx.lineTo(toPixX(this._trail[i].cx), toPixY(this._trail[i].cy));
+        }
+        ctx.stroke();
+      }
+
+      // 3. Draw trail dots (every 5th point to avoid clutter)
+      for (let i = 0; i < this._trail.length; i += 5) {
+        const p = this._trail[i];
+        const px = toPixX(p.cx);
+        const py = toPixY(p.cy);
+        const radius = Math.max(1, 3 - Math.log10(Math.max(1, p.zoom)) / 4);
+        let color;
+        if (p.zoom < 1e4) color = '#00d4ff';
+        else if (p.zoom < 1e8) color = '#8b5cf6';
+        else color = '#ffd700';
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      // 4. Current position: white cross
+      if (this._trail.length > 0) {
+        const last = this._trail[this._trail.length - 1];
+        const lx = toPixX(last.cx);
+        const ly = toPixY(last.cy);
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(lx - 5, ly); ctx.lineTo(lx + 5, ly);
+        ctx.moveTo(lx, ly - 5); ctx.lineTo(lx, ly + 5);
+        ctx.stroke();
+      }
+    }
+
+    // ── Autopilot status bar ──────────────────────────────────────────
+
+    updateAutopilotStatus(active, destination) {
+      let bar = document.getElementById('autopilot-status');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'autopilot-status';
+        Object.assign(bar.style, {
+          position:      'fixed',
+          top:           '16px',
+          left:          '50%',
+          transform:     'translateX(-50%)',
+          zIndex:        '1001',
+          padding:       '6px 20px',
+          background:    'rgba(5,5,16,0.88)',
+          border:        '1px solid rgba(0,212,255,0.45)',
+          borderRadius:  '20px',
+          fontFamily:    "'Orbitron', monospace",
+          fontSize:      '11px',
+          letterSpacing: '0.15em',
+          color:         '#00d4ff',
+          display:       'none',
+          pointerEvents: 'none',
+        });
+        document.body.appendChild(bar);
+      }
+      if (active) {
+        bar.textContent = '✦ AUTO-PILOT  —  ' + destination;
+        bar.style.display = 'block';
+      } else {
+        bar.style.display = 'none';
+      }
+    }
+  }
+
+  // ── HSL to RGB helper (used by _renderMinimapBg) ──────────────────
+
+  function hslToRgbMinimap(h, s, l) {
+    h = ((h % 360) + 360) % 360;
+    s /= 100;
+    l /= 100;
+
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+
+    let r = 0, g = 0, b = 0;
+
+    if (h < 60)       { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else              { r = c; g = 0; b = x; }
+
+    return [
+      Math.round((r + m) * 255),
+      Math.round((g + m) * 255),
+      Math.round((b + m) * 255),
+    ];
   }
 
   window.CosmosUI = new CosmosUI();

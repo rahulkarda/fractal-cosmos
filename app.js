@@ -16,6 +16,7 @@ function scheduleRender() {
     if (!renderer || !ui) return; // guard: called before init completes
     renderer.render(cx, cy, zoom);
     ui.updateCoords(cx, cy, zoom);
+    ui.addTrailPoint(cx, cy, zoom);
     checkWorldDiscovery();
   }, 40);
 }
@@ -117,6 +118,12 @@ document.addEventListener('DOMContentLoaded', function () {
       throw new Error('CosmosUI instance is missing init() — patches.js PATCH 1 may not have applied correctly');
     }
     ui.init();
+    ui.initMinimap(canvas);
+    var autopilot = new window.AutoPilot(
+      function() { return { cx: cx, cy: cy, zoom: zoom }; },
+      function(ncx, ncy, nzoom) { cx = ncx; cy = ncy; zoom = nzoom; },
+      scheduleRender
+    );
 
     // 3. Hash restore — apply before initial render so shared URLs work
     // Parse URL hash inline — avoids dependency on CosmosUI static method
@@ -148,6 +155,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Canvas: wheel (zoom centred on cursor) ──────────────────────────────
     canvas.addEventListener('wheel', function (e) {
+      if (typeof autopilot !== 'undefined' && autopilot.isRunning) autopilot.stop();
       e.preventDefault();
       var factor = e.deltaY < 0 ? 1.6 : 0.625;
       cx += (e.clientX - canvas.width  / 2) / zoom * (1 - 1 / factor);
@@ -158,6 +166,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Canvas: mouse drag ──────────────────────────────────────────────────
     canvas.addEventListener('mousedown', function (e) {
+      if (typeof autopilot !== 'undefined' && autopilot.isRunning) autopilot.stop();
       isDragging = true;
       dragStartX  = e.clientX;
       dragStartY  = e.clientY;
@@ -262,6 +271,15 @@ document.addEventListener('DOMContentLoaded', function () {
           ui.captureScreenshot(canvas);
           break;
 
+        // Auto-pilot
+        case 'a':
+        case 'A':
+          if (typeof autopilot !== 'undefined') {
+            if (autopilot.isRunning) { autopilot.stop(); }
+            else { autopilot.start(); }
+          }
+          break;
+
         // Color themes: digit keys 1-5 (not numpad)
         case '1':
           if (!isNumpad) { renderer.setTheme(0); scheduleRender(); }
@@ -315,6 +333,10 @@ document.addEventListener('DOMContentLoaded', function () {
       scheduleRender();
     });
 
+    window.addEventListener('cosmos:autopilotStatus', function(e) {
+      // UI handles this — no-op here, handled in ui.js init()
+    });
+
     // ── Controls hint (bottom-right) ────────────────────────────────────────
     var hint = document.getElementById('controls-hint');
     if (!hint) {
@@ -338,6 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
       ['1 – 5',         'color themes'],
       ['B',             'bookmark'],
       ['S',             'screenshot'],
+      ['A',             'auto-pilot'],
     ];
     hint.style.display = 'grid';
     hint.style.gridTemplateColumns = 'auto auto';
