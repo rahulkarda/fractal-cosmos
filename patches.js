@@ -34,21 +34,54 @@
   //
   // Strategy: replace window.CosmosUI with a constructor function whose
   // `new` operator always returns the singleton that ui.js already created.
+  //
+  // We also capture the singleton in a module-level variable so that PATCH 3
+  // can reference the real instance object regardless of what window.CosmosUI
+  // points to after this patch runs.
+  var _cosmosUISingleton = null; // set below
+
   if (window.CosmosUI && typeof window.CosmosUI !== 'function') {
-    var _singleton = window.CosmosUI;
+    // Normal case: ui.js exposed a plain instance object.
+    _cosmosUISingleton = window.CosmosUI;
 
     // ES5 constructor — returning an object from `new` replaces `this`
     window.CosmosUI = function CosmosUI() {
-      return _singleton;
+      return _cosmosUISingleton;
     };
 
     // Preserve all own properties on the constructor itself so that code
     // referencing window.CosmosUI.someMethod directly still works.
-    Object.keys(_singleton).forEach(function (key) {
-      window.CosmosUI[key] = _singleton[key];
+    Object.keys(_cosmosUISingleton).forEach(function (key) {
+      window.CosmosUI[key] = _cosmosUISingleton[key];
     });
 
     console.info('[patches.js] PATCH 1 applied: window.CosmosUI is now constructable.');
+  } else if (window.CosmosUI && typeof window.CosmosUI === 'function') {
+    // Edge case: window.CosmosUI is already a constructor function.
+    // Instantiate it once to get the singleton, then wrap it to always return
+    // that same instance so repeated `new window.CosmosUI()` calls are safe.
+    try {
+      var _existingInstance = new window.CosmosUI();
+      if (_existingInstance && typeof _existingInstance.init === 'function') {
+        // It already constructs a usable instance — use it as the singleton.
+        _cosmosUISingleton = _existingInstance;
+        var _OrigCosmosUI = window.CosmosUI;
+        window.CosmosUI = function CosmosUI() {
+          return _cosmosUISingleton;
+        };
+        // Copy static methods from original constructor
+        Object.keys(_OrigCosmosUI).forEach(function (key) {
+          window.CosmosUI[key] = _OrigCosmosUI[key];
+        });
+        console.info('[patches.js] PATCH 1 (constructor branch) applied: singleton captured and window.CosmosUI wrapped.');
+      } else {
+        console.warn('[patches.js] PATCH 1 skipped: window.CosmosUI is a function but constructed instance lacks init(). app.js will proceed; a missing init() will be caught by its own guard.');
+      }
+    } catch (e) {
+      console.warn('[patches.js] PATCH 1 skipped: constructing window.CosmosUI threw:', e);
+    }
+  } else {
+    console.warn('[patches.js] PATCH 1 skipped: window.CosmosUI is not defined at patches.js load time. Check ui.js script order.');
   }
 
   // ── PATCH 2: prevent app.js from clobbering #controls-hint ────────────────
@@ -88,13 +121,12 @@
 
   // ── PATCH 3: show civilization and resources in the world panel ────────────
   // Wrap showWorldPanel to inject the two extra fields after the original call.
-  var _uiSingleton = window.CosmosUI;  // already the singleton at this point
-  var _singleton3  = _uiSingleton;     // same reference, named for clarity
+  //
+  // Use _cosmosUISingleton (captured by PATCH 1 above) rather than reading
+  // window.CosmosUI here, because window.CosmosUI is now a constructor function
+  // (after PATCH 1) and does not carry the instance methods directly.
+  var _singleton3 = _cosmosUISingleton;
 
-  // We need to wait until after ui.init() runs (DOMContentLoaded), so we
-  // patch at module-load time by wrapping the method on the prototype chain.
-  // Because CosmosUI is built as a plain IIFE class instance we patch the
-  // instance's own method directly.
   if (_singleton3 && typeof _singleton3.showWorldPanel === 'function') {
     var _origShowWorldPanel = _singleton3.showWorldPanel.bind(_singleton3);
 
@@ -142,6 +174,8 @@
     };
 
     console.info('[patches.js] PATCH 3 applied: showWorldPanel now renders civilization and resources.');
+  } else if (!_singleton3) {
+    console.warn('[patches.js] PATCH 3 skipped: CosmosUI singleton not available (PATCH 1 did not run).');
   }
 
   // ── PATCH 4: fix AudioEngine resume after stop() ──────────────────────────
